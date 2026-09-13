@@ -1,0 +1,304 @@
+.login-page {
+  --login-deep: #0b3d38;
+  --login-mid: #125e56;
+  --login-mist: rgba(228, 241, 236, 0.12);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(120% 80% at 10% 0%, #d7ebe4 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, #cfe0d9 0%, transparent 50%),
+    var(--app-canvas);
+  color: var(--app-ink);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.login-shell {
+  width: min(1080px, 100%);
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  min-height: min(640px, calc(100dvh - 2rem));
+  border: 1px solid color-mix(in srgb, var(--app-line) 80%, transparent);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: var(--app-paper);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 24px 60px -28px rgba(28, 43, 40, 0.35);
+  animation: login-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-brand {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(1.75rem, 4vw, 3rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background:
+    linear-gradient(155deg, var(--login-deep) 0%, var(--login-mid) 48%, #1a7a70 100%);
+  color: #f4faf8;
+}
+
+.login-brand-glow {
+  position: absolute;
+  inset: -20% auto auto -10%;
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(circle, rgba(180, 230, 210, 0.28), transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+  animation: login-glow 8s ease-in-out infinite alternate;
+}
+
+.login-manuscript {
+  position: absolute;
+  inset: 12% 8% 18% 42%;
+  border: 1px solid rgba(244, 250, 248, 0.18);
+  border-radius: 0.65rem;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 250, 248, 0.08),
+    rgba(244, 250, 248, 0.03)
+  );
+  padding: 1.1rem 1rem 1.1rem 1.35rem;
+  pointer-events: none;
+  z-index: 0;
+  transform: rotate(2.5deg);
+  animation: login-float 7s ease-in-out infinite alternate;
+}
+
+.login-manuscript-rule {
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.85rem;
+  width: 1px;
+  background: rgba(244, 250, 248, 0.35);
+}
+
+.login-outline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: rgba(244, 250, 248, 0.55);
+}
+
+.login-outline li:nth-child(1),
+.login-outline li:nth-child(2),
+.login-outline li:nth-child(3) {
+  color: rgba(244, 250, 248, 0.82);
+}
+
+.login-brand-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 28rem;
+  animation: login-fade 700ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(228, 241, 236, 0.78);
+}
+
+.login-title {
+  margin: 0.65rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 3.35rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+}
+
+.login-lead {
+  margin: 1rem 0 0;
+  max-width: 22rem;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: rgba(244, 250, 248, 0.82);
+}
+
+.login-steps {
+  margin: 1.75rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  border-top: 1px solid rgba(244, 250, 248, 0.18);
+  padding-top: 1.1rem;
+}
+
+.login-steps dt {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+}
+
+.login-steps dd {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: rgba(244, 250, 248, 0.68);
+}
+
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+  background:
+    linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--app-tint) 55%, white) 100%);
+}
+
+.login-panel-inner {
+  width: min(22.5rem, 100%);
+  animation: login-fade 620ms 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-panel-head {
+  margin-bottom: 1.75rem;
+}
+
+.login-panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--app-ink);
+}
+
+.login-panel-desc {
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  color: var(--app-muted);
+}
+
+.login-submit {
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.login-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.login-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+@keyframes login-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes login-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes login-float {
+  from {
+    transform: rotate(2.5deg) translateY(0);
+  }
+  to {
+    transform: rotate(1.5deg) translateY(-6px);
+  }
+}
+
+@keyframes login-glow {
+  from {
+    opacity: 0.7;
+    transform: translate(0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate(8%, 6%);
+  }
+}
+
+@media (max-width: 860px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .login-brand {
+    min-height: 280px;
+    justify-content: flex-end;
+    padding-bottom: 1.5rem;
+  }
+
+  .login-manuscript {
+    inset: 10% 6% 42% 48%;
+    opacity: 0.85;
+  }
+
+  .login-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .login-page {
+    padding: 0;
+  }
+
+  .login-shell {
+    border: 0;
+    border-radius: 0;
+    min-height: 100dvh;
+    box-shadow: none;
+  }
+
+  .login-manuscript {
+    display: none;
+  }
+
+  .login-steps {
+    gap: 0.5rem;
+  }
+
+  .login-steps dd {
+    font-size: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-shell,
+  .login-brand-copy,
+  .login-panel-inner,
+  .login-manuscript,
+  .login-brand-glow {
+    animation: none;
+  }
+
+  .login-submit:hover:not(:disabled) {
+    transform: none;
+  }
+}
