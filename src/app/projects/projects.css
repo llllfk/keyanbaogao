@@ -1,0 +1,20 @@
+:root {
+  --app-canvas: #eef2f0;
+  --app-paper: #fbfcfb;
+  --app-ink: #1c2b28;
+  --app-muted: #5f726c;
+  --app-line: #d5e0db;
+  --app-tint: #e4f1ec;
+  --app-accent: #0f766e;
+  --font-display: 'Noto Serif SC', 'Songti SC', 'SimSun', ui-serif, Georgia,
+    serif;
+  /* 报告预览统一宋体，标题只加粗加大，避免黑体/宋体混用看起来像两套字 */
+  --font-report: 'SimSun', '宋体', 'Noto Serif SC', 'Songti SC', 'STSong',
+    serif;
+  --font-report-heading: var(--font-report);
+  --font-report-body: var(--font-report);
+}
+
+body {
+  background: var(--app-canvas);
+}

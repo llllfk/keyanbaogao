@@ -121,6 +121,9 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.data/
+!/.data/uploads/.gitkeep
+
 # Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Cache
@@ -155,6 +158,8 @@ Desktop.ini
 *.temp
 .tmp/
 .temp/
+tmp/
+_tmp_*
 # Optional files
 *.tgz
 *.tar
