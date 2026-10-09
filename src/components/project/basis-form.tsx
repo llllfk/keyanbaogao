@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -16,19 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { fuzzyMatchFields } from '@/lib/project/fuzzy-match';
 import type { BasisItem, ProjectRecord } from '@/lib/project/schema';
 import { cn } from '@/lib/utils';
-
-type PackSummary = {
-  id: string;
-  name: string;
-  description: string;
-};
 
 type BasisFormProps = {
   project: ProjectRecord;
   initialItems: BasisItem[];
-  matchedPacks: PackSummary[];
+  /** 未锁定时进入页面自动大模型识别并勾选 */
+  autoAiMatch?: boolean;
 };
 
 const GROUP_LABEL: Record<BasisItem['group'], string> = {
@@ -56,13 +52,15 @@ function errorMessage(data: unknown, fallback: string): string {
 export function BasisForm({
   project,
   initialItems,
-  matchedPacks,
+  autoAiMatch = false,
 }: BasisFormProps) {
   const router = useRouter();
   const [items, setItems] = useState<BasisItem[]>(initialItems);
   const [pending, startTransition] = useTransition();
   const [drafting, setDrafting] = useState(false);
   const [aiPicking, setAiPicking] = useState(false);
+  const [aiReason, setAiReason] = useState('');
+  const autoStarted = useRef(false);
   const [manual, setManual] = useState({
     group: 'project' as BasisItem['group'],
     title: '',
@@ -82,8 +80,6 @@ export function BasisForm({
     project: '',
   });
 
-  const packs = matchedPacks;
-
   const groupedAll = useMemo(() => {
     const map: Record<BasisItem['group'], BasisItem[]> = {
       policy: [],
@@ -100,17 +96,11 @@ export function BasisForm({
     return map;
   }, [items]);
 
-  const matchItem = (item: BasisItem, query: string) => {
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      return true;
-    }
-    const hay = [item.title, item.docCode, item.issuer, item.sourceSite]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    return hay.includes(q);
-  };
+  const matchItem = (item: BasisItem, query: string) =>
+    fuzzyMatchFields(
+      [item.title, item.docCode, item.issuer, item.sourceSite],
+      query,
+    );
 
   const selectedCount = items.filter(item => item.selected).length;
 
@@ -207,65 +197,71 @@ export function BasisForm({
     setItems(current => current.map(item => ({ ...item, selected })));
   };
 
-  const aiRecommendSelect = async () => {
+  const aiMatchAndSelect = async (silent = false) => {
     setAiPicking(true);
     try {
       const response = await fetch(
-        `/api/projects/${project.id}/basis/ai-recommend`,
+        `/api/projects/${project.id}/basis/ai-match`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items }),
         },
       );
       const data: unknown = await response.json();
       if (!response.ok) {
-        throw new Error(errorMessage(data, 'AI 勾选失败'));
+        throw new Error(errorMessage(data, 'AI 识别失败'));
       }
-      const selectedIds =
+      const payload =
         typeof data === 'object' &&
         data !== null &&
         'data' in data &&
         typeof (data as { data: unknown }).data === 'object' &&
-        (data as { data: { selectedIds?: unknown } }).data !== null &&
-        Array.isArray(
-          (data as { data: { selectedIds: unknown } }).data.selectedIds,
-        )
-          ? (
-              data as { data: { selectedIds: unknown[] } }
-            ).data.selectedIds.filter(
-              (id): id is string => typeof id === 'string',
-            )
-          : [];
-      if (selectedIds.length === 0) {
-        throw new Error('AI 未返回有效勾选');
+        (data as { data: unknown }).data !== null
+          ? (data as {
+              data: {
+                items?: BasisItem[];
+                reason?: string;
+                selectedCount?: number;
+              };
+            }).data
+          : null;
+      if (!payload?.items?.length) {
+        throw new Error('AI 未返回依据列表');
       }
-      const idSet = new Set(selectedIds);
-      setItems(current =>
-        current.map(item => {
-          if (item.group === 'project') {
-            return item;
-          }
-          return { ...item, selected: idSet.has(item.id) };
-        }),
-      );
-      const reason =
-        typeof data === 'object' &&
-        data !== null &&
-        'data' in data &&
-        typeof (data as { data: { reason?: unknown } }).data?.reason === 'string'
-          ? (data as { data: { reason: string } }).data.reason.trim()
-          : '';
-      toast.success(
-        reason
-          ? `AI 已勾选 ${selectedIds.length} 条：${reason}`
-          : `AI 已勾选 ${selectedIds.length} 条，请复核后锁定`,
-      );
+      setItems(payload.items);
+      const reason = payload.reason?.trim() ?? '';
+      setAiReason(reason);
+      const selectedCount =
+        payload.selectedCount ??
+        payload.items.filter(item => item.selected).length;
+      if (!silent) {
+        toast.success(
+          reason
+            ? `AI 已识别并勾选 ${selectedCount} 条：${reason}`
+            : `AI 已识别并勾选 ${selectedCount} 条，请复核后锁定`,
+        );
+      } else if (reason) {
+        toast.message(`AI 已按项目画像识别依据：${reason}`);
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'AI 勾选失败');
+      toast.error(error instanceof Error ? error.message : 'AI 识别失败');
     } finally {
       setAiPicking(false);
     }
+  };
+
+  useEffect(() => {
+    if (!autoAiMatch || autoStarted.current) {
+      return;
+    }
+    autoStarted.current = true;
+    void aiMatchAndSelect(true);
+    // 仅首次进入未锁定页自动跑一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAiMatch]);
+
+  const aiRecommendSelect = async () => {
+    await aiMatchAndSelect(false);
   };
 
   const removeManual = (id: string) => {
@@ -306,27 +302,35 @@ export function BasisForm({
     <div className="space-y-8">
       <section className="rounded-lg border border-[var(--app-line)] bg-[var(--app-tint)]/40 px-4 py-4">
         <p className="text-sm text-[var(--app-ink)]">
-          已按项目画像从智能依据库召回{' '}
-          <span className="font-medium">{packs.length}</span>{' '}
-          个智能包中的候选（共 {items.length} 条）。可点「AI
-          智能勾选」让模型在候选内二次筛选；也可手工勾选。智写只用最终锁定的条目。也可打开{' '}
-          <Link
-            href="/basis"
-            className="text-[var(--app-accent)] underline-offset-2 hover:underline"
-          >
-            智能依据库
-          </Link>{' '}
-          管理知识源。
+          {aiPicking
+            ? '大模型正在根据项目画像勾选依据条目…'
+            : <>
+                已由大模型识别{' '}
+                <span className="font-medium">{items.length}</span>{' '}
+                条候选依据。请复核后锁定；可点「重新 AI 识别」。本项目批复请手填。可打开{' '}
+                <Link
+                  href="/basis"
+                  className="text-[var(--app-accent)] underline-offset-2 hover:underline"
+                >
+                  智能依据库
+                </Link>{' '}
+                管理知识源。
+              </>}
         </p>
+        {aiReason && !aiPicking ? (
+          <p className="mt-2 text-xs text-[var(--app-muted)]">
+            识别说明：{aiReason}
+          </p>
+        ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={aiPicking || pending || drafting || items.length === 0}
+            disabled={aiPicking || pending || drafting}
             onClick={() => void aiRecommendSelect()}
           >
-            {aiPicking ? 'AI 勾选中…' : 'AI 智能勾选'}
+            {aiPicking ? 'AI 识别中…' : '重新 AI 识别'}
           </Button>
           <Button
             type="button"
@@ -347,23 +351,11 @@ export function BasisForm({
             全选候选
           </Button>
         </div>
-        {packs.length > 0 ? (
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {packs.map(pack => (
-              <li
-                key={pack.id}
-                className="rounded-full border border-[var(--app-line)] bg-white px-3 py-1 text-xs text-[var(--app-muted)]"
-                title={pack.description}
-              >
-                {pack.name}
-              </li>
-            ))}
-          </ul>
-        ) : (
+        {items.length === 0 && !aiPicking ? (
           <p className="mt-2 text-sm text-[var(--app-muted)]">
-            暂无智能召回结果，请手填本项目批复，或完善行业 / 地区 / 细分领域后重试。
+            暂无识别结果，请配置 DeepSeek API Key 后点「重新 AI 识别」，或手填本项目批复。
           </p>
-        )}
+        ) : null}
         {project.basisConfirmedAt ? (
           <p className="mt-2 text-xs text-[var(--app-muted)]">
             上次确认：{new Date(project.basisConfirmedAt).toLocaleString('zh-CN')}
@@ -417,7 +409,7 @@ export function BasisForm({
                 <Input
                   id={`basis-search-${group}`}
                   value={query}
-                  placeholder="本类内按名称/文号查询…"
+                  placeholder="模糊查询：名称 / 文号，多个词用空格…"
                   onChange={event =>
                     setGroupSearch(group, event.target.value)
                   }
@@ -464,7 +456,9 @@ export function BasisForm({
                           {[
                             item.sourceSite || null,
                             item.issuer,
-                            item.source === 'manual' ? '本项目补充' : '依据包',
+                            item.source === 'manual'
+                              ? '本项目补充'
+                              : item.sourceSite || '依据库',
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -650,10 +644,10 @@ export function BasisForm({
           <Button
             type="button"
             variant="outline"
-            disabled={aiPicking || drafting || pending || items.length === 0}
+            disabled={aiPicking || drafting || pending}
             onClick={() => void aiRecommendSelect()}
           >
-            {aiPicking ? 'AI 勾选中…' : 'AI 智能勾选'}
+            {aiPicking ? 'AI 识别中…' : '重新 AI 识别'}
           </Button>
           <Button
             type="button"

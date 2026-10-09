@@ -79,8 +79,8 @@ export const projectAttachmentSchema = z.object({
 
 export type ProjectAttachment = z.infer<typeof projectAttachmentSchema>;
 
-/** 表单校验用：不含附件（附件走独立上传接口） */
-export const basicInfoFormSchema = z.object({
+/** 信息采集字段（不含附件与“其他”条件校验） */
+const basicInfoFieldsSchema = z.object({
   doFinancialAnalysis: z.boolean(),
   name: z
     .string()
@@ -136,13 +136,60 @@ export const basicInfoFormSchema = z.object({
   equipmentList: optionalText(3000, '设备清单不超过 3000 字'),
   designText: optionalText(3000, '设计方案文本不超过 3000 字'),
   fundingSources: z.array(fundingSchema).min(1, '请至少选择一种资金来源'),
+  /** 总投资额（万元），信息采集阶段先录总额 */
+  totalInvestmentWan: z
+    .number({ error: '请填写总投资额（万元）' })
+    .finite('请填写有效的总投资额')
+    .positive('总投资额须大于 0')
+    .max(100000000, '总投资额过大'),
   constructionManagementMode: constructionModeSchema,
+  constructionManagementModeOther: optionalText(
+    200,
+    '其他建设管理模式不超过 200 字',
+  ),
   operationMode: operationModeSchema,
+  operationModeOther: optionalText(200, '其他运营模式不超过 200 字'),
 });
 
-export const basicInfoSchema = basicInfoFormSchema.extend({
+function refineModeOtherTexts(
+  data: {
+    constructionManagementMode: string;
+    constructionManagementModeOther: string;
+    operationMode: string;
+    operationModeOther: string;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (
+    data.constructionManagementMode === 'other' &&
+    !data.constructionManagementModeOther.trim()
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['constructionManagementModeOther'],
+      message: '请填写其他建设管理模式',
+    });
+  }
+  if (data.operationMode === 'other' && !data.operationModeOther.trim()) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['operationModeOther'],
+      message: '请填写其他运营模式',
+    });
+  }
+}
+
+/** 表单校验用：不含附件（附件走独立上传接口） */
+export const basicInfoFormSchema =
+  basicInfoFieldsSchema.superRefine(refineModeOtherTexts);
+
+/** 完整基础信息对象（可 .partial()，供创建项目等） */
+export const basicInfoObjectSchema = basicInfoFieldsSchema.extend({
   attachments: z.array(projectAttachmentSchema),
 });
+
+export const basicInfoSchema =
+  basicInfoObjectSchema.superRefine(refineModeOtherTexts);
 
 /** 草稿：允许未填完，只校验类型与长度上限 */
 export const basicInfoDraftSchema = z
@@ -170,8 +217,19 @@ export const basicInfoDraftSchema = z
     equipmentList: optionalText(3000, '设备清单不超过 3000 字'),
     designText: optionalText(3000, '设计方案文本不超过 3000 字'),
     fundingSources: z.array(fundingSchema),
+    totalInvestmentWan: z
+      .number()
+      .finite()
+      .nonnegative()
+      .max(100000000)
+      .optional(),
     constructionManagementMode: constructionModeSchema,
+    constructionManagementModeOther: optionalText(
+      200,
+      '其他建设管理模式不超过 200 字',
+    ),
     operationMode: operationModeSchema,
+    operationModeOther: optionalText(200, '其他运营模式不超过 200 字'),
     attachments: z.array(projectAttachmentSchema).optional(),
   })
   .partial();
@@ -217,7 +275,7 @@ export const projectSchema = z.object({
   status: statusSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
-  basicInfo: basicInfoSchema,
+  basicInfo: basicInfoObjectSchema,
   basisItems: z.array(basisItemSchema).default([]),
   basisConfirmedAt: z.string().nullable().optional(),
   finance: projectFinanceSchema.nullable().optional(),
@@ -225,7 +283,7 @@ export const projectSchema = z.object({
   reportChapters: z.array(reportChapterSchema).default([]),
 });
 
-export type BasicInfoInput = z.infer<typeof basicInfoSchema>;
+export type BasicInfoInput = z.infer<typeof basicInfoObjectSchema>;
 export type BasisItem = z.infer<typeof basisItemSchema>;
 export type OutlineConfig = z.infer<typeof outlineConfigSchema>;
 export type ReportChapter = z.infer<typeof reportChapterSchema>;
@@ -256,8 +314,11 @@ export const defaultBasicInfo = (): BasicInfoInput => ({
   equipmentList: '',
   designText: '',
   fundingSources: [],
+  totalInvestmentWan: 0,
   constructionManagementMode: 'epc',
+  constructionManagementModeOther: '',
   operationMode: 'self',
+  operationModeOther: '',
   attachments: [],
 });
 
@@ -274,10 +335,25 @@ export function normalizeBasicInfo(
         .filter((item): item is ProjectAttachment => item !== null)
     : [];
 
+  const rawTotal = input?.totalInvestmentWan;
+  const totalInvestmentWan =
+    typeof rawTotal === 'number' && Number.isFinite(rawTotal) && rawTotal > 0
+      ? rawTotal
+      : 0;
+
   return {
     ...defaultBasicInfo(),
     ...input,
     doFinancialAnalysis: input?.doFinancialAnalysis === true,
+    totalInvestmentWan,
+    constructionManagementModeOther:
+      typeof input?.constructionManagementModeOther === 'string'
+        ? input.constructionManagementModeOther
+        : '',
+    operationModeOther:
+      typeof input?.operationModeOther === 'string'
+        ? input.operationModeOther
+        : '',
     attachments,
   };
 }

@@ -26,7 +26,8 @@ const previewSchema = z.object({
 
 const importSchema = z.object({
   sourceUrl: httpsUrlSchema('原文链接'),
-  packId: z.string().trim().min(1, '请选择依据包').max(64),
+  /** 内部归库用；不传则按来源官网自动选择 */
+  packId: z.string().trim().max(64).optional(),
   group: z.enum(['policy', 'standard', 'project']),
   title: z.string().trim().min(1, '请填写标题').max(300),
   docCode: z.string().trim().max(100).optional(),

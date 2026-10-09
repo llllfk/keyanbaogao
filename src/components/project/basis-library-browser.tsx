@@ -6,11 +6,14 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   GROUP_LABEL,
   type BasisLibraryEntry,
   type BasisLibraryViewModel,
 } from '@/lib/project/basis-library-shared';
+import { fuzzyMatchFields } from '@/lib/project/fuzzy-match';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 10;
@@ -39,7 +42,7 @@ function errorMessage(data: unknown, fallback: string): string {
 export function BasisLibraryBrowser({ data }: BasisLibraryBrowserProps) {
   const router = useRouter();
   const [siteFilter, setSiteFilter] = useState<string>('all');
-  const [packFilter, setPackFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -63,10 +66,19 @@ export function BasisLibraryBrowser({ data }: BasisLibraryBrowserProps) {
     if (siteFilter !== 'all' && item.siteId !== siteFilter) {
       return false;
     }
-    if (packFilter !== 'all' && item.packId !== packFilter) {
-      return false;
-    }
-    return true;
+    return fuzzyMatchFields(
+      [
+        item.title,
+        item.docCode,
+        item.issuer,
+        item.sourceSite,
+        item.siteName,
+        item.packName,
+        item.group,
+        GROUP_LABEL[item.group],
+      ],
+      search,
+    );
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -172,18 +184,17 @@ export function BasisLibraryBrowser({ data }: BasisLibraryBrowserProps) {
     <section className="space-y-6">
       <div className="rounded-xl border border-[var(--app-line)] bg-[var(--app-paper)] px-5 py-5">
         <p className="text-xs font-medium tracking-wide text-[var(--app-accent)]">
-          第 3 步 · 浏览核验
+          第 2 步 · 浏览核验
         </p>
         <h2 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--app-ink)]">
-          按来源 / 推荐包查看
+          按来源官网查看
         </h2>
         <p className="mt-1 text-sm text-[var(--app-muted)]">
-          可按官网或推荐包筛选；支持单条或批量删除误入库条目。
+          支持名称/文号模糊查询，并可按官网筛选；支持单条或批量删除误入库条目。
         </p>
         <p className="mt-3 text-sm text-[var(--app-ink)]">
           当前共 <span className="font-medium">{flatItems.length}</span> 条，覆盖{' '}
-          <span className="font-medium">{data.bySite.length}</span> 个官网、
-          <span className="font-medium">{data.packs.length}</span> 个推荐包。
+          <span className="font-medium">{data.bySite.length}</span> 个官网。
         </p>
       </div>
 
@@ -193,12 +204,32 @@ export function BasisLibraryBrowser({ data }: BasisLibraryBrowserProps) {
             还没有入库内容
           </p>
           <p className="mt-2 text-sm text-[var(--app-muted)]">
-            请先完成第 2 步：添加栏目后点「同步此源」或「同步全部知识源」。
+            请先完成第 1 步：添加栏目后点「同步此源」或「同步全部知识源」。
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="space-y-3">
+            <div className="max-w-xl">
+              <Label htmlFor="basis-library-search" className="sr-only">
+                模糊查询
+              </Label>
+              <Input
+                id="basis-library-search"
+                value={search}
+                placeholder="模糊查询：名称 / 文号 / 发文机关，多个词用空格"
+                onChange={event => {
+                  setSearch(event.target.value);
+                  resetPage();
+                }}
+              />
+              {search.trim() ? (
+                <p className="mt-1.5 text-xs text-[var(--app-muted)]">
+                  匹配 {filtered.length} 条
+                  {siteFilter !== 'all' ? '（含当前官网筛选）' : ''}
+                </p>
+              ) : null}
+            </div>
             <div>
               <p className="mb-2 text-xs font-medium text-[var(--app-muted)]">
                 按来源官网
@@ -228,40 +259,6 @@ export function BasisLibraryBrowser({ data }: BasisLibraryBrowserProps) {
                         resetPage();
                       }}
                       label={`${section.siteName} ${count}`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium text-[var(--app-muted)]">
-                按推荐包
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <FilterChip
-                  active={packFilter === 'all'}
-                  onClick={() => {
-                    setPackFilter('all');
-                    resetPage();
-                  }}
-                  label={`全部包 ${flatItems.length}`}
-                />
-                {data.packs.map(pack => {
-                  const count = flatItems.filter(
-                    item => item.packId === pack.id,
-                  ).length;
-                  if (count === 0) {
-                    return null;
-                  }
-                  return (
-                    <FilterChip
-                      key={pack.id}
-                      active={packFilter === pack.id}
-                      onClick={() => {
-                        setPackFilter(pack.id);
-                        resetPage();
-                      }}
-                      label={`${pack.name} ${count}`}
                     />
                   );
                 })}
@@ -322,7 +319,6 @@ export function BasisLibraryBrowser({ data }: BasisLibraryBrowserProps) {
                       {' · '}
                       {GROUP_LABEL[item.group]}
                       {item.issuer ? ` · ${item.issuer}` : ''}
-                      {item.packName ? ` · 推荐包 ${item.packName}` : ''}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">

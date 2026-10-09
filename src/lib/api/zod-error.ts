@@ -16,7 +16,7 @@ export function formatZodError(error: unknown): string | null {
       : path === 'sourceUrl'
         ? '原文链接'
         : path === 'packId'
-          ? '依据包'
+          ? '归库标识'
           : path === 'title'
             ? '标题'
             : path === 'name'

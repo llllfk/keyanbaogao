@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 
@@ -106,8 +106,21 @@ export function BasicInfoForm({ project }: BasicInfoFormProps) {
     defaultValues: {
       ...project.basicInfo,
       doFinancialAnalysis: project.basicInfo.doFinancialAnalysis === true,
+      totalInvestmentWan: project.basicInfo.totalInvestmentWan || 0,
+      constructionManagementModeOther:
+        project.basicInfo.constructionManagementModeOther ?? '',
+      operationModeOther: project.basicInfo.operationModeOther ?? '',
     },
     mode: 'onBlur',
+  });
+
+  const constructionManagementMode = useWatch({
+    control: form.control,
+    name: 'constructionManagementMode',
+  });
+  const operationMode = useWatch({
+    control: form.control,
+    name: 'operationMode',
   });
 
   const persistFinanceFlag = async (enabled: boolean) => {
@@ -756,6 +769,54 @@ export function BasicInfoForm({ project }: BasicInfoFormProps) {
         <Section title="5. 投资与运营">
           <FormField
             control={form.control}
+            name="totalInvestmentWan"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  总投资额 <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <div className="flex max-w-xl items-center gap-2">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="any"
+                      placeholder="请输入总投资额"
+                      className="bg-white"
+                      value={
+                        typeof field.value === 'number' && field.value > 0
+                          ? field.value
+                          : ''
+                      }
+                      onChange={event => {
+                        const raw = event.target.value.trim();
+                        if (raw === '') {
+                          field.onChange(0);
+                          return;
+                        }
+                        const next = Number(raw);
+                        field.onChange(Number.isFinite(next) ? next : 0);
+                      }}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                    <span className="shrink-0 text-sm text-[var(--app-muted)]">
+                      万元
+                    </span>
+                  </div>
+                </FormControl>
+                <p className="text-xs text-[var(--app-muted)]">
+                  先录入项目总投资额；详细测算可在后续财务步骤展开（若启用）。
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="fundingSources"
             render={({ field }) => {
               const selectedLabels = FUNDING_SOURCES.filter(item =>
@@ -865,6 +926,30 @@ export function BasicInfoForm({ project }: BasicInfoFormProps) {
             )}
           />
 
+          {constructionManagementMode === 'other' ? (
+            <FormField
+              control={form.control}
+              name="constructionManagementModeOther"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    其他建设管理模式{' '}
+                    <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="请填写其他内容"
+                      maxLength={200}
+                      className="max-w-xl bg-white"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : null}
+
           <FormField
             control={form.control}
             name="operationMode"
@@ -894,6 +979,29 @@ export function BasicInfoForm({ project }: BasicInfoFormProps) {
               </FormItem>
             )}
           />
+
+          {operationMode === 'other' ? (
+            <FormField
+              control={form.control}
+              name="operationModeOther"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    其他运营模式 <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="请填写其他内容"
+                      maxLength={200}
+                      className="max-w-xl bg-white"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : null}
         </Section>
 
         <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-3 border-t border-[var(--app-line)] bg-[var(--app-paper)]/95 px-4 py-4 backdrop-blur sm:mx-0 sm:rounded-b-xl">

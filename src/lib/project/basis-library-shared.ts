@@ -10,12 +10,6 @@ export type BasisLibraryEntry = BasisPackItem & {
 
 export type BasisLibraryViewModel = {
   totalItems: number;
-  packs: Array<{
-    id: string;
-    name: string;
-    description: string;
-    itemCount: number;
-  }>;
   bySite: Array<{
     siteId: BasisSourceSiteId | 'other';
     siteName: string;

@@ -5,10 +5,7 @@ import { AppShell } from '@/components/project/app-shell';
 import { BasisForm } from '@/components/project/basis-form';
 import { WizardSteps } from '@/components/project/wizard-steps';
 import { getSessionUser, toProjectScope } from '@/lib/auth/session';
-import {
-  buildRecommendedBasisItems,
-  getMatchedPackSummaries,
-} from '@/lib/project/match-basis';
+import { buildCandidateBasisItems } from '@/lib/project/match-basis';
 import { getProject } from '@/lib/project/store';
 
 type PageProps = {
@@ -44,10 +41,10 @@ export default async function BasisPage({ params }: PageProps) {
     notFound();
   }
 
-  const [initialItems, matchedPacks] = await Promise.all([
-    buildRecommendedBasisItems(project.basicInfo, project.basisItems),
-    getMatchedPackSummaries(project.basicInfo),
-  ]);
+  const alreadyLocked = Boolean(project.basisConfirmedAt);
+  const initialItems = alreadyLocked
+    ? project.basisItems
+    : await buildCandidateBasisItems(project.basicInfo, project.basisItems);
 
   return (
     <AppShell title={project.basicInfo.name || '未命名项目'} user={user}>
@@ -60,7 +57,8 @@ export default async function BasisPage({ params }: PageProps) {
             智能依据
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--app-muted)]">
-            基于智能依据库与项目画像自动召回候选文件，请人工确认后锁定。本项目批复类材料请手填；确认列表将驱动报告 1.3 节生成。
+            进入本页后按来源与项目画像召回候选，并由大模型勾选相关依据条目，请复核后锁定。本项目批复类材料请手填；确认列表将驱动报告
+            1.3 节生成。
           </p>
         </div>
         <WizardSteps
@@ -71,7 +69,7 @@ export default async function BasisPage({ params }: PageProps) {
         <BasisForm
           project={project}
           initialItems={initialItems}
-          matchedPacks={matchedPacks}
+          autoAiMatch={!alreadyLocked}
         />
       </div>
     </AppShell>

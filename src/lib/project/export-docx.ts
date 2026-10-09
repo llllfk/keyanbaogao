@@ -18,23 +18,20 @@ import {
 } from 'docx';
 
 import {
+  cnSizeToHalfPoints,
+  DEFAULT_EXPORT_FORMAT,
+  firstLineIndentTwip,
+  lineSpacingToDocx,
+  type ExportFormat,
+  type HeadingFormat,
+  type NumberingStyle,
+} from '@/lib/export/format-schema';
+import {
   flattenOutlineNodes,
   getOutlineTemplate,
   sortChaptersForDocument,
 } from '@/lib/project/outline';
-import type { ProjectRecord, ReportChapter } from '@/lib/project/schema';
-
-const FONT_BODY = {
-  ascii: 'Times New Roman',
-  eastAsia: '宋体',
-  hAnsi: 'Times New Roman',
-} as const;
-
-const FONT_HEADING = {
-  ascii: 'SimHei',
-  eastAsia: '黑体',
-  hAnsi: 'SimHei',
-} as const;
+import type { ProjectRecord } from '@/lib/project/schema';
 
 const CN_DIGITS = '〇一二三四五六七八九';
 const CN_CHAPTER = [
@@ -62,37 +59,104 @@ const CN_CHAPTER = [
 ] as const;
 
 type BodyBlock =
-  | { type: 'heading'; level: 2 | 3; text: string }
+  | { type: 'heading'; level: 2 | 3 | 4; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'bullet'; text: string }
   | { type: 'table'; rows: string[][] };
 
 type DocChild = Paragraph | Table | TableOfContents;
 
+type HeadingLevelNum = 1 | 2 | 3 | 4;
+
+type DocxHeadingLevel = (typeof HeadingLevel)[keyof typeof HeadingLevel];
+
+function runFont(eastAsia: string) {
+  return {
+    ascii: 'Times New Roman',
+    eastAsia,
+    hAnsi: 'Times New Roman',
+  } as const;
+}
+
+function alignToDocx(
+  align: HeadingFormat['align'],
+): (typeof AlignmentType)[keyof typeof AlignmentType] {
+  switch (align) {
+    case 'center':
+      return AlignmentType.CENTER;
+    case 'both':
+      return AlignmentType.JUSTIFIED;
+    default:
+      return AlignmentType.LEFT;
+  }
+}
+
+function getHeadingFormat(
+  exportFormat: ExportFormat,
+  level: HeadingLevelNum,
+): HeadingFormat {
+  switch (level) {
+    case 1:
+      return exportFormat.heading1;
+    case 2:
+      return exportFormat.heading2;
+    case 3:
+      return exportFormat.heading3;
+    case 4:
+      return exportFormat.heading4;
+  }
+}
+
+function headingDocxLevel(level: HeadingLevelNum): DocxHeadingLevel {
+  switch (level) {
+    case 1:
+      return HeadingLevel.HEADING_1;
+    case 2:
+      return HeadingLevel.HEADING_2;
+    case 3:
+      return HeadingLevel.HEADING_3;
+    case 4:
+      return HeadingLevel.HEADING_4;
+  }
+}
+
 function majorSectionId(chapterId: string): string {
   return chapterId.split('.')[0] ?? chapterId;
 }
 
-function headingLevelForChapterId(
-  chapterId: string,
-): (typeof HeadingLevel)[keyof typeof HeadingLevel] {
+function headingLevelForChapterId(chapterId: string): HeadingLevelNum {
   const depth = chapterId.split('.').length;
   if (depth <= 1) {
-    return HeadingLevel.HEADING_1;
+    return 1;
   }
   if (depth === 2) {
-    return HeadingLevel.HEADING_2;
+    return 2;
   }
-  return HeadingLevel.HEADING_3;
+  if (depth === 3) {
+    return 3;
+  }
+  return 4;
 }
 
-/** 将大纲一级标题写成「第一章  概述」 */
-function formatMajorHeading(sectionId: string, title: string): string {
+function formatMajorHeading(
+  sectionId: string,
+  title: string,
+  style: NumberingStyle,
+): string {
   const n = Number(sectionId);
-  if (Number.isInteger(n) && n >= 1 && n < CN_CHAPTER.length) {
-    return `第${CN_CHAPTER[n]}章  ${title}`;
+  if (!Number.isInteger(n) || n < 1 || n >= CN_CHAPTER.length) {
+    return `${sectionId}  ${title}`;
   }
-  return `${sectionId}  ${title}`;
+  switch (style) {
+    case 'chapter_arabic':
+      return `第 ${n} 章  ${title}`;
+    case 'chapter_cn':
+      return `第${CN_CHAPTER[n]}章  ${title}`;
+    case 'list_cn':
+      return `${CN_CHAPTER[n]}、${title}`;
+    case 'list_num':
+      return `${n}、${title}`;
+  }
 }
 
 function formatChineseYearMonth(date: Date = new Date()): string {
@@ -201,7 +265,7 @@ function parseContentBlocks(
       }
       blocks.push({
         type: 'heading',
-        level: hashes <= 2 ? 2 : 3,
+        level: hashes <= 2 ? 2 : hashes === 3 ? 3 : 4,
         text: title,
       });
       continue;
@@ -217,7 +281,6 @@ function parseContentBlocks(
       continue;
     }
 
-    // 编号列表（如 1.3 编制依据条目）每条单独成段，避免被拼成一行
     if (/^\d+\.\s+\S/.test(line)) {
       flushParagraph();
       const text = stripInlineMarkdown(line);
@@ -240,7 +303,104 @@ function parseContentBlocks(
     : [{ type: 'paragraph', text: '【待补充】' }];
 }
 
-function markdownTableToDocx(rows: string[][]): Table {
+function buildStyleFromHeadingFormat(
+  format: HeadingFormat,
+  outlineLevel: number,
+) {
+  const spacing = lineSpacingToDocx(format);
+  return {
+    run: {
+      font: runFont(format.font),
+      size: cnSizeToHalfPoints(format.size),
+      bold: format.bold,
+    },
+    paragraph: {
+      spacing: {
+        before: outlineLevel === 0 ? 360 : outlineLevel === 1 ? 280 : 240,
+        after: outlineLevel === 0 ? 200 : outlineLevel === 1 ? 160 : 120,
+        line: spacing.line,
+        lineRule: spacing.lineRule,
+      },
+      alignment: alignToDocx(format.align),
+      outlineLevel,
+    },
+  };
+}
+
+function headingParagraph(
+  text: string,
+  level: HeadingLevelNum,
+  exportFormat: ExportFormat,
+): Paragraph {
+  const format = getHeadingFormat(exportFormat, level);
+  const spacing = lineSpacingToDocx(format);
+  return new Paragraph({
+    heading: headingDocxLevel(level),
+    alignment: alignToDocx(format.align),
+    spacing: {
+      before:
+        level === 1 ? 320 : level === 2 ? 280 : level === 3 ? 240 : 200,
+      after: level === 1 ? 200 : level === 2 ? 160 : 120,
+      line: spacing.line,
+      lineRule: spacing.lineRule,
+    },
+    indent: {
+      firstLine: firstLineIndentTwip(
+        format.firstLineIndentChars,
+        format.size,
+      ),
+    },
+    children: [
+      new TextRun({
+        text,
+        bold: format.bold,
+        font: runFont(format.font),
+        size: cnSizeToHalfPoints(format.size),
+      }),
+    ],
+  });
+}
+
+function bodyParagraph(
+  text: string,
+  exportFormat: ExportFormat,
+  options?: { bullet?: boolean },
+): Paragraph {
+  const format = exportFormat.body;
+  const spacing = lineSpacingToDocx(format);
+  const firstLineIndent = firstLineIndentTwip(
+    format.firstLineIndentChars,
+    format.size,
+  );
+  return new Paragraph({
+    alignment: alignToDocx(format.align),
+    spacing: {
+      after: 120,
+      line: spacing.line,
+      lineRule: spacing.lineRule,
+    },
+    indent: options?.bullet
+      ? {
+          left: convertInchesToTwip(0.25),
+          firstLine: firstLineIndent,
+        }
+      : { firstLine: firstLineIndent },
+    children: [
+      new TextRun({
+        text: options?.bullet ? `• ${text}` : text,
+        bold: format.bold,
+        font: runFont(format.font),
+        size: cnSizeToHalfPoints(format.size),
+      }),
+    ],
+  });
+}
+
+function markdownTableToDocx(
+  rows: string[][],
+  exportFormat: ExportFormat,
+): Table {
+  const format = exportFormat.body;
   const colCount = Math.max(1, ...rows.map(row => row.length));
   const width = Math.floor(9000 / colCount);
   const border = {
@@ -274,9 +434,9 @@ function markdownTableToDocx(rows: string[][]): Table {
                   children: [
                     new TextRun({
                       text: cell,
-                      font: FONT_BODY,
-                      size: 18,
-                      bold: rowIndex === 0,
+                      font: runFont(format.font),
+                      size: cnSizeToHalfPoints(format.size),
+                      bold: rowIndex === 0 || format.bold,
                     }),
                   ],
                 }),
@@ -288,50 +448,15 @@ function markdownTableToDocx(rows: string[][]): Table {
   });
 }
 
-function bodyParagraph(text: string, options?: { bullet?: boolean }): Paragraph {
-  return new Paragraph({
-    spacing: { after: 120, line: 360 },
-    indent: options?.bullet
-      ? { left: convertInchesToTwip(0.25) }
-      : { firstLine: convertInchesToTwip(0.3) },
-    children: [
-      new TextRun({
-        text: options?.bullet ? `• ${text}` : text,
-        font: FONT_BODY,
-        size: 24,
-      }),
-    ],
-  });
-}
-
-function headingParagraph(
-  text: string,
-  level: (typeof HeadingLevel)[keyof typeof HeadingLevel],
-): Paragraph {
-  const size =
-    level === HeadingLevel.HEADING_1
-      ? 32
-      : level === HeadingLevel.HEADING_2
-        ? 28
-        : 24;
-  return new Paragraph({
-    heading: level,
-    spacing: { before: 320, after: 160 },
-    children: [
-      new TextRun({
-        text,
-        bold: true,
-        font: FONT_HEADING,
-        size,
-      }),
-    ],
-  });
-}
-
-/** 对标小泓星封面：温馨提示 + 项目名 + 可行性研究报告 + 编制时间 */
-function coverParagraphs(project: ProjectRecord): Paragraph[] {
+function coverParagraphs(
+  project: ProjectRecord,
+  exportFormat: ExportFormat,
+): Paragraph[] {
   const name = project.basicInfo.name || '未命名项目';
   const dateText = formatChineseYearMonth();
+  const h1 = exportFormat.heading1;
+  const body = exportFormat.body;
+
   return [
     new Paragraph({ spacing: { before: 200 }, children: [] }),
     new Paragraph({
@@ -340,9 +465,9 @@ function coverParagraphs(project: ProjectRecord): Paragraph[] {
       children: [
         new TextRun({
           text: '温馨提示',
-          bold: true,
-          font: FONT_HEADING,
-          size: 44,
+          bold: h1.bold,
+          font: runFont(h1.font),
+          size: cnSizeToHalfPoints(h1.size),
         }),
       ],
     }),
@@ -352,9 +477,9 @@ function coverParagraphs(project: ProjectRecord): Paragraph[] {
       children: [
         new TextRun({
           text: '本报告内容由人工智能AI系统基于您提供的信息和公开数据生成，仅供参考使用。',
-          bold: true,
-          font: FONT_BODY,
-          size: 32,
+          bold: body.bold,
+          font: runFont(body.font),
+          size: cnSizeToHalfPoints(body.size),
         }),
       ],
     }),
@@ -366,9 +491,9 @@ function coverParagraphs(project: ProjectRecord): Paragraph[] {
       children: [
         new TextRun({
           text: name,
-          bold: true,
-          font: FONT_HEADING,
-          size: 52,
+          bold: h1.bold,
+          font: runFont(h1.font),
+          size: cnSizeToHalfPoints(h1.size),
         }),
       ],
     }),
@@ -378,9 +503,9 @@ function coverParagraphs(project: ProjectRecord): Paragraph[] {
       children: [
         new TextRun({
           text: '可行性研究报告',
-          bold: true,
-          font: FONT_HEADING,
-          size: 52,
+          bold: h1.bold,
+          font: runFont(h1.font),
+          size: cnSizeToHalfPoints(h1.size),
         }),
       ],
     }),
@@ -390,9 +515,9 @@ function coverParagraphs(project: ProjectRecord): Paragraph[] {
       children: [
         new TextRun({
           text: `编制时间: ${dateText}`,
-          bold: true,
-          font: FONT_BODY,
-          size: 32,
+          bold: body.bold,
+          font: runFont(body.font),
+          size: cnSizeToHalfPoints(body.size),
         }),
       ],
     }),
@@ -400,11 +525,10 @@ function coverParagraphs(project: ProjectRecord): Paragraph[] {
   ];
 }
 
-/**
- * 目录页：插入 Word TOC 域；打开 Word 时会提示更新域以生成真实页码
- *（与小泓星一致带页码，页码由 Word 排版后写入）。
- */
-function tocPageChildren(): DocChild[] {
+function tocPageChildren(exportFormat: ExportFormat): DocChild[] {
+  const h1 = exportFormat.heading1;
+  const body = exportFormat.body;
+
   return [
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -412,9 +536,9 @@ function tocPageChildren(): DocChild[] {
       children: [
         new TextRun({
           text: '目   录',
-          bold: true,
-          font: FONT_HEADING,
-          size: 32,
+          bold: h1.bold,
+          font: runFont(h1.font),
+          size: cnSizeToHalfPoints(h1.size),
         }),
       ],
     }),
@@ -424,21 +548,24 @@ function tocPageChildren(): DocChild[] {
       children: [
         new TextRun({
           text: '（若打开后目录为空或页码未刷新，请在 Word 中右键目录 → 更新域）',
-          font: FONT_BODY,
-          size: 18,
+          font: runFont(body.font),
+          size: cnSizeToHalfPoints(body.size),
           color: '666666',
         }),
       ],
     }),
     new TableOfContents('目录', {
       hyperlink: true,
-      headingStyleRange: '1-3',
+      headingStyleRange: '1-4',
     }),
     new Paragraph({ children: [new PageBreak()] }),
   ];
 }
 
-export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> {
+export async function buildProjectDocx(
+  project: ProjectRecord,
+  exportFormat: ExportFormat = DEFAULT_EXPORT_FORMAT,
+): Promise<Buffer> {
   const outlineId = project.outlineConfig?.outlineId ?? 'gov_feasibility_2023';
   const chapters = sortChaptersForDocument(
     (project.reportChapters ?? []).filter(
@@ -456,8 +583,8 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
   );
 
   const children: DocChild[] = [
-    ...coverParagraphs(project),
-    ...tocPageChildren(),
+    ...coverParagraphs(project, exportFormat),
+    ...tocPageChildren(exportFormat),
   ];
   let lastMajor = '';
 
@@ -467,9 +594,13 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
       lastMajor = major;
       const parent = nodeById.get(major);
       const majorTitle = parent
-        ? formatMajorHeading(parent.id, parent.title)
-        : formatMajorHeading(major, major);
-      children.push(headingParagraph(majorTitle, HeadingLevel.HEADING_1));
+        ? formatMajorHeading(
+            parent.id,
+            parent.title,
+            exportFormat.numberingStyle,
+          )
+        : formatMajorHeading(major, major, exportFormat.numberingStyle);
+      children.push(headingParagraph(majorTitle, 1, exportFormat));
     }
 
     const chapterTitle = chapter.title || chapter.chapterId;
@@ -478,6 +609,7 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
         headingParagraph(
           chapterTitle,
           headingLevelForChapterId(chapter.chapterId),
+          exportFormat,
         ),
       );
     }
@@ -486,21 +618,16 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
     for (const block of blocks) {
       if (block.type === 'heading') {
         children.push(
-          headingParagraph(
-            block.text,
-            block.level === 2
-              ? HeadingLevel.HEADING_2
-              : HeadingLevel.HEADING_3,
-          ),
+          headingParagraph(block.text, block.level, exportFormat),
         );
         continue;
       }
       if (block.type === 'bullet') {
-        children.push(bodyParagraph(block.text, { bullet: true }));
+        children.push(bodyParagraph(block.text, exportFormat, { bullet: true }));
         continue;
       }
       if (block.type === 'table') {
-        children.push(markdownTableToDocx(block.rows));
+        children.push(markdownTableToDocx(block.rows, exportFormat));
         children.push(
           new Paragraph({
             spacing: { after: 160 },
@@ -509,9 +636,11 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
         );
         continue;
       }
-      children.push(bodyParagraph(block.text));
+      children.push(bodyParagraph(block.text, exportFormat));
     }
   }
+
+  const bodySpacing = lineSpacingToDocx(exportFormat.body);
 
   const doc = new Document({
     creator: '可研智写',
@@ -524,25 +653,23 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
       default: {
         document: {
           run: {
-            font: FONT_BODY,
-            size: 24,
+            font: runFont(exportFormat.body.font),
+            size: cnSizeToHalfPoints(exportFormat.body.size),
+            bold: exportFormat.body.bold,
           },
           paragraph: {
-            spacing: { line: 360, after: 120 },
+            spacing: {
+              line: bodySpacing.line,
+              lineRule: bodySpacing.lineRule,
+              after: 120,
+            },
+            alignment: alignToDocx(exportFormat.body.align),
           },
         },
-        heading1: {
-          run: { font: FONT_HEADING, size: 32, bold: true },
-          paragraph: { spacing: { before: 360, after: 200 }, outlineLevel: 0 },
-        },
-        heading2: {
-          run: { font: FONT_HEADING, size: 28, bold: true },
-          paragraph: { spacing: { before: 280, after: 160 }, outlineLevel: 1 },
-        },
-        heading3: {
-          run: { font: FONT_HEADING, size: 24, bold: true },
-          paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 2 },
-        },
+        heading1: buildStyleFromHeadingFormat(exportFormat.heading1, 0),
+        heading2: buildStyleFromHeadingFormat(exportFormat.heading2, 1),
+        heading3: buildStyleFromHeadingFormat(exportFormat.heading3, 2),
+        heading4: buildStyleFromHeadingFormat(exportFormat.heading4, 3),
       },
     },
     sections: [
@@ -565,8 +692,8 @@ export async function buildProjectDocx(project: ProjectRecord): Promise<Buffer> 
                 children: [
                   new TextRun({
                     children: [PageNumber.CURRENT],
-                    font: FONT_BODY,
-                    size: 18,
+                    font: runFont(exportFormat.body.font),
+                    size: cnSizeToHalfPoints(exportFormat.body.size),
                   }),
                 ],
               }),

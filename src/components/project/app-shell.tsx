@@ -64,6 +64,15 @@ export function AppShell({ children, title, user }: AppShellProps) {
               >
                 模型设置
               </Link>
+              <Link
+                href="/settings/format"
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-[var(--app-ink)] transition-colors',
+                  'hover:bg-[var(--app-tint)]',
+                )}
+              >
+                导出格式
+              </Link>
             </nav>
           </div>
           <div className="flex min-w-0 items-center gap-3">

@@ -27,8 +27,18 @@ function buildProjectBrief(basic: BasicInfoInput): string {
     `建设地点：${basic.locationRegion || '（未填）'}`,
     `主要产品/服务：${basic.mainProductsServices || '（未填）'}`,
     `资金来源：${funding || '（未填）'}`,
-    `建设管理模式：${labelOf(CONSTRUCTION_MODES, basic.constructionManagementMode)}`,
-    `运营模式：${labelOf(OPERATION_MODES, basic.operationMode)}`,
+    `总投资额：${basic.totalInvestmentWan > 0 ? `${basic.totalInvestmentWan} 万元` : '（未填）'}`,
+    `建设管理模式：${
+      basic.constructionManagementMode === 'other' &&
+      basic.constructionManagementModeOther.trim()
+        ? `其他（${basic.constructionManagementModeOther.trim()}）`
+        : labelOf(CONSTRUCTION_MODES, basic.constructionManagementMode)
+    }`,
+    `运营模式：${
+      basic.operationMode === 'other' && basic.operationModeOther.trim()
+        ? `其他（${basic.operationModeOther.trim()}）`
+        : labelOf(OPERATION_MODES, basic.operationMode)
+    }`,
     `是否做财务测算：${basic.doFinancialAnalysis ? '是' : '否'}`,
     `建设内容与规模：${(basic.constructionContentScale || '').slice(0, 400) || '（未填）'}`,
   ].join('\n');
@@ -108,9 +118,9 @@ export async function aiRecommendBasisSelection(options: {
   const catalog = selectable
     .map(
       (item, index) =>
-        `${index + 1}. id=${item.id} | 组别=${item.group} | 《${item.title}》${
-          item.docCode ? `（${item.docCode}）` : ''
-        }`,
+        `${index + 1}. id=${item.id} | 组别=${item.group} | 来源=${
+          item.sourceSite || '未标注'
+        } | 《${item.title}》${item.docCode ? `（${item.docCode}）` : ''}`,
     )
     .join('\n');
 

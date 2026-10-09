@@ -70,7 +70,7 @@ export const projects = pgTable('projects', {
 });
 
 /**
- * 全局共享依据包（不区分角色/租户，全站共用）
+ * 依据库内部归库桶（不对外展示；按来源官网自动映射）
  */
 export const basisPacks = pgTable('basis_packs', {
   id: varchar('id', { length: 64 }).primaryKey(),

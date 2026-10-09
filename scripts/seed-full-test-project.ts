@@ -135,8 +135,11 @@ function buildBasicInfo(): BasicInfoInput {
     designText:
       '设计遵循城市道路与排水相关规范，结合海绵城市要求设置透水铺装与下凹绿地。',
     fundingSources: ['fiscal', 'special_bond', 'self'],
+    totalInvestmentWan: 30623.25,
     constructionManagementMode: 'epc',
+    constructionManagementModeOther: '',
     operationMode: 'self',
+    operationModeOther: '',
     attachments: [],
   };
 }

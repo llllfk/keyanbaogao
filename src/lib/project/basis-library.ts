@@ -24,15 +24,17 @@ const SEED_MATCH: Record<
 > = {
   pack_common_gov: { matchAlways: true, matchKeywords: '' },
   pack_finance_eval: { matchAlways: false, matchKeywords: '' },
-  pack_eng_municipal_road: {
-    matchAlways: false,
-    matchKeywords: '道路,市政,公路',
-  },
-  pack_region_henan: { matchAlways: false, matchKeywords: '河南' },
-  pack_industry_forestry_fire: {
-    matchAlways: false,
-    matchKeywords: '防灭火,防火,林草',
-  },
+  pack_eng_municipal_road: { matchAlways: false, matchKeywords: '' },
+  pack_eng_building: { matchAlways: false, matchKeywords: '' },
+  pack_eng_transport: { matchAlways: false, matchKeywords: '' },
+  pack_eng_environment: { matchAlways: false, matchKeywords: '' },
+  pack_region_henan: { matchAlways: false, matchKeywords: '' },
+  pack_region_shaanxi: { matchAlways: false, matchKeywords: '' },
+  pack_region_gansu: { matchAlways: false, matchKeywords: '' },
+  pack_region_qinghai: { matchAlways: false, matchKeywords: '' },
+  pack_region_ningxia: { matchAlways: false, matchKeywords: '' },
+  pack_region_xinjiang: { matchAlways: false, matchKeywords: '' },
+  pack_industry_forestry_fire: { matchAlways: false, matchKeywords: '' },
 };
 
 function mapItem(item: {
@@ -107,30 +109,41 @@ export async function ensureBasisPackLibrarySeeded(): Promise<void> {
         [id],
       );
     }
-    if (match.matchKeywords) {
-      await pool.query(
-        `UPDATE basis_packs
-         SET match_keywords = $2, updated_at = now()
-         WHERE id = $1 AND match_keywords = ''`,
-        [id, match.matchKeywords],
-      );
-    }
   }
 
-  const existingItems = await db
-    .select({ id: basisPackItems.id })
-    .from(basisPackItems)
-    .limit(1);
-  if (existingItems.length > 0) {
-    return;
-  }
+  // 选包已改大模型：清空历史关键词，避免界面/旧逻辑残留
+  await pool.query(
+    `UPDATE basis_packs
+     SET match_keywords = '', updated_at = now()
+     WHERE match_keywords <> ''`,
+  );
+
+  // 按 sourceUrl 补齐种子条目（已有库也能吃到新增白名单，不覆盖已有行）
+  const existingUrls = await db
+    .select({
+      packId: basisPackItems.packId,
+      sourceUrl: basisPackItems.sourceUrl,
+    })
+    .from(basisPackItems);
+  const urlSet = new Set(
+    existingUrls.map(row => `${row.packId}|${row.sourceUrl}`),
+  );
 
   for (const pack of SEED_BASIS_PACKS) {
-    if (pack.items.length === 0) {
+    const toInsert = pack.items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => {
+        const url = item.sourceUrl ?? '';
+        if (!url) {
+          return false;
+        }
+        return !urlSet.has(`${pack.id}|${url}`);
+      });
+    if (toInsert.length === 0) {
       continue;
     }
     await db.insert(basisPackItems).values(
-      pack.items.map((item, index) => ({
+      toInsert.map(({ item, index }) => ({
         packId: pack.id,
         group: item.group,
         title: item.title,
@@ -258,13 +271,13 @@ export async function createBasisPack(
   await ensureBasisPackLibrarySeeded();
   const name = input.name.trim();
   if (!name) {
-    throw new Error('请填写依据包名称');
+    throw new Error('请填写文件分组名称');
   }
   const id =
     input.id?.trim() ||
     `pack_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   if (!/^pack_[a-z0-9_]+$/i.test(id)) {
-    throw new Error('依据包 ID 格式无效');
+    throw new Error('文件分组 ID 格式无效');
   }
 
   const db = getDb();
@@ -274,7 +287,7 @@ export async function createBasisPack(
     .where(eq(basisPacks.id, id))
     .limit(1);
   if (existing.length > 0) {
-    throw new Error('依据包 ID 已存在');
+    throw new Error('文件分组 ID 已存在');
   }
 
   await db.insert(basisPacks).values({
@@ -302,7 +315,7 @@ export async function updateBasisPack(
   await ensureBasisPackLibrarySeeded();
   const name = input.name.trim();
   if (!name) {
-    throw new Error('请填写依据包名称');
+    throw new Error('请填写文件分组名称');
   }
   const db = getDb();
   const [pack] = await db
@@ -311,7 +324,7 @@ export async function updateBasisPack(
     .where(eq(basisPacks.id, packId))
     .limit(1);
   if (!pack) {
-    throw new Error('依据包不存在');
+    throw new Error('文件分组不存在');
   }
 
   const description = (input.description ?? pack.description).trim().slice(0, 500);
@@ -357,7 +370,7 @@ export async function deleteBasisPack(packId: string): Promise<void> {
     .where(eq(basisPacks.id, packId))
     .limit(1);
   if (!pack) {
-    throw new Error('依据包不存在');
+    throw new Error('文件分组不存在');
   }
   await db.delete(basisPacks).where(eq(basisPacks.id, packId));
 }

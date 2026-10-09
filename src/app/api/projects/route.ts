@@ -1,6 +1,6 @@
 import { fail, ok } from '@/lib/api/response';
 import { getSessionUser } from '@/lib/auth/session';
-import { basicInfoSchema } from '@/lib/project/schema';
+import { basicInfoObjectSchema } from '@/lib/project/schema';
 import { createProject, listProjects } from '@/lib/project/store';
 
 export async function GET() {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const body: unknown = await request.json().catch(() => ({}));
     const parsed =
       body && typeof body === 'object' && Object.keys(body).length > 0
-        ? basicInfoSchema.partial().parse(body)
+        ? basicInfoObjectSchema.partial().parse(body)
         : undefined;
     const project = await createProject(
       { tenantId: user.tenantId, userId: user.id },

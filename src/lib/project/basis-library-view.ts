@@ -63,12 +63,6 @@ export async function getBasisLibraryViewModel(): Promise<BasisLibraryViewModel>
 
   return {
     totalItems: entries.length,
-    packs: packs.map(pack => ({
-      id: pack.id,
-      name: pack.name,
-      description: pack.description,
-      itemCount: pack.items.length,
-    })),
     bySite,
   };
 }

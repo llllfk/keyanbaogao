@@ -6,8 +6,17 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ExportFormatForm } from '@/components/settings/export-format-form';
+import type { ExportFormat } from '@/lib/export/format-schema';
 import type { ProjectRecord, ReportChapter } from '@/lib/project/schema';
 import { sortChaptersForDocument } from '@/lib/project/outline';
 import { cn } from '@/lib/utils';
@@ -154,6 +163,7 @@ export function ReportWorkbench({ project }: ReportWorkbenchProps) {
   );
   const [rewriting, setRewriting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
   const [rewriteInstruction, setRewriteInstruction] = useState('');
 
   const active: ReportChapter | undefined = useMemo(
@@ -238,10 +248,14 @@ export function ReportWorkbench({ project }: ReportWorkbenchProps) {
     }
   };
 
-  const exportDocx = async () => {
+  const exportDocx = async (format: ExportFormat) => {
     setExporting(true);
     try {
-      const response = await fetch(`/api/projects/${project.id}/export/docx`);
+      const response = await fetch(`/api/projects/${project.id}/export/docx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format }),
+      });
       if (!response.ok) {
         const payload: unknown = await response.json().catch(() => null);
         toast.error(errorMessage(payload, '导出失败'));
@@ -262,6 +276,7 @@ export function ReportWorkbench({ project }: ReportWorkbenchProps) {
       anchor.remove();
       URL.revokeObjectURL(url);
       toast.success('Word 已开始下载');
+      setFormatOpen(false);
       router.refresh();
     } catch {
       toast.error('导出失败');
@@ -289,6 +304,43 @@ export function ReportWorkbench({ project }: ReportWorkbenchProps) {
 
   return (
     <div className="space-y-4">
+      <Dialog
+        open={formatOpen}
+        onOpenChange={open => {
+          if (!exporting) {
+            setFormatOpen(open);
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={!exporting}
+          className="flex max-h-[90vh] w-[min(960px,calc(100%-2rem))] max-w-[960px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px]"
+        >
+          <DialogHeader className="shrink-0 border-b border-[var(--app-line)] px-6 py-4 text-left">
+            <DialogTitle>设置格式</DialogTitle>
+            <DialogDescription>
+              选择编号样式与标题字体后确定，将按该格式导出 Word，并保存为默认导出样式。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            {formatOpen ? (
+              <ExportFormatForm
+                variant="dialog"
+                confirmLabel="确定并导出"
+                onCancel={() => {
+                  if (!exporting) {
+                    setFormatOpen(false);
+                  }
+                }}
+                onConfirmed={async format => {
+                  await exportDocx(format);
+                }}
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--app-muted)]">
           AI 初稿已成 {doneCount}/{chapters.length} 章
@@ -296,9 +348,7 @@ export function ReportWorkbench({ project }: ReportWorkbenchProps) {
         <Button
           type="button"
           disabled={exporting || doneCount < 1}
-          onClick={() => {
-            void exportDocx();
-          }}
+          onClick={() => setFormatOpen(true)}
         >
           {exporting ? '导出中…' : '导出 Word'}
         </Button>
@@ -356,9 +406,7 @@ export function ReportWorkbench({ project }: ReportWorkbenchProps) {
                     type="button"
                     size="sm"
                     disabled={exporting || rewriting}
-                    onClick={() => {
-                      void exportDocx();
-                    }}
+                    onClick={() => setFormatOpen(true)}
                   >
                     {exporting ? '导出中…' : '导出 Word'}
                   </Button>

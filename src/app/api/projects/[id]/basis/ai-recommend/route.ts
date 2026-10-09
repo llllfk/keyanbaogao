@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { fail, ok } from '@/lib/api/response';
 import { getSessionUser } from '@/lib/auth/session';
 import { aiRecommendBasisSelection } from '@/lib/project/ai-recommend-basis';
-import { buildRecommendedBasisItems } from '@/lib/project/match-basis';
+import { buildCandidateBasisItems } from '@/lib/project/match-basis';
 import { basisItemSchema } from '@/lib/project/schema';
 import { getProject } from '@/lib/project/store';
 
@@ -43,7 +43,7 @@ export async function POST(request: Request, context: RouteContext) {
     const candidates =
       body?.items && body.items.length > 0
         ? body.items
-        : await buildRecommendedBasisItems(
+        : await buildCandidateBasisItems(
             project.basicInfo,
             project.basisItems,
           );

@@ -319,7 +319,8 @@ export async function previewBasisImport(
 
 export type BasisImportInput = {
   sourceUrl: string;
-  packId: string;
+  /** 内部归库；缺省按来源官网自动选择 */
+  packId?: string;
   group: BasisGroup;
   title: string;
   docCode?: string;
@@ -347,9 +348,10 @@ export async function importBasisFromUrl(input: BasisImportInput): Promise<{
     throw new Error('链接不在已支持官网白名单内');
   }
 
-  const pack = await getBasisPackById(input.packId);
+  const packId = input.packId?.trim() || suggestPackIdForSite(siteId);
+  const pack = await getBasisPackById(packId);
   if (!pack) {
-    throw new Error('请选择有效的依据包');
+    throw new Error('该来源暂无法归库，请检查官网白名单或稍后重试');
   }
 
   if (!['policy', 'standard', 'project'].includes(input.group)) {
@@ -509,10 +511,10 @@ export async function addBasisListSource(input: AddListSourceInput): Promise<{
     throw new Error('链接不在已支持官网白名单内');
   }
 
-  const packId = input.packId ?? suggestPackIdForSite(siteId);
+  const packId = input.packId?.trim() || suggestPackIdForSite(siteId);
   const pack = await getBasisPackById(packId);
   if (!pack) {
-    throw new Error('请选择有效的依据包（可先在上方新建）');
+    throw new Error('该来源暂无法归库，请检查官网白名单或稍后重试');
   }
 
   const group = input.group ?? suggestGroupForUrl(listUrl, siteId);

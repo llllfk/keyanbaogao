@@ -39,8 +39,11 @@ const basicInfo = {
   designText:
     '设计方案遵循现行城市道路与排水相关规范，结合海绵城市要求设置透水铺装与下凹绿地。',
   fundingSources: ['fiscal', 'special_bond', 'self'],
+  totalInvestmentWan: 28500,
   constructionManagementMode: 'epc',
+  constructionManagementModeOther: '',
   operationMode: 'self',
+  operationModeOther: '',
 };
 
 async function main() {

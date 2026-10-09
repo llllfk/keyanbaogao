@@ -15,20 +15,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-type PackOption = { id: string; name: string };
-
 type PreviewState = {
   sourceUrl: string;
   siteId: string;
   siteName: string;
-  suggestedPackId: string;
   suggestedGroup: 'policy' | 'standard' | 'project';
   title: string;
   docCode: string;
   issuer: string;
   fetchMode: 'document' | 'catalog';
   syncStatus: 'fetched' | 'fallback';
-  packs: PackOption[];
 };
 
 type ListSourceRow = {
@@ -73,7 +69,6 @@ export function BasisImportPanel() {
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
-  const [packId, setPackId] = useState('');
   const [group, setGroup] = useState<'policy' | 'standard' | 'project'>(
     'policy',
   );
@@ -85,7 +80,6 @@ export function BasisImportPanel() {
   const [listTitle, setListTitle] = useState('');
   const [listTitleHint, setListTitleHint] = useState('');
   const [resolvingList, setResolvingList] = useState(false);
-  const [listPackId, setListPackId] = useState('pack_common_gov');
   const [listGroup, setListGroup] = useState<'policy' | 'standard' | 'project'>(
     'policy',
   );
@@ -96,7 +90,6 @@ export function BasisImportPanel() {
   const [restoringListUrl, setRestoringListUrl] = useState<string | null>(null);
   const [listSources, setListSources] = useState<ListSourceRow[]>([]);
   const [disabledSources, setDisabledSources] = useState<ListSourceRow[]>([]);
-  const [packs, setPacks] = useState<PackOption[]>([]);
   const [lastSync, setLastSync] = useState<SyncSummary | null>(null);
 
   const loadListSources = async () => {
@@ -114,7 +107,6 @@ export function BasisImportPanel() {
               data: {
                 sources?: ListSourceRow[];
                 disabledSources?: ListSourceRow[];
-                packs?: PackOption[];
               };
             }).data
           : null;
@@ -122,12 +114,6 @@ export function BasisImportPanel() {
         setListSources(data.sources);
       }
       setDisabledSources(data?.disabledSources ?? []);
-      if (data?.packs?.length) {
-        setPacks(data.packs);
-        if (!listPackId) {
-          setListPackId(data.packs[0].id);
-        }
-      }
     } catch {
       // ignore
     }
@@ -174,7 +160,6 @@ export function BasisImportPanel() {
                     data: {
                       preview?: {
                         title: string;
-                        suggestedPackId: string;
                         suggestedGroup: 'policy' | 'standard' | 'project';
                         siteName: string;
                       };
@@ -187,7 +172,6 @@ export function BasisImportPanel() {
           }
           setListTitle(prev => prev.trim() || data.preview!.title);
           setListTitleHint(`已识别：${data.preview.siteName}`);
-          setListPackId(data.preview.suggestedPackId);
           setListGroup(data.preview.suggestedGroup);
         } catch {
           if (!cancelled) {
@@ -232,7 +216,6 @@ export function BasisImportPanel() {
       }
       const next = data.preview;
       setPreview(next);
-      setPackId(next.suggestedPackId);
       setGroup(next.suggestedGroup);
       setTitle(next.title);
       setDocCode(next.docCode);
@@ -264,7 +247,6 @@ export function BasisImportPanel() {
         body: JSON.stringify({
           action: 'import',
           sourceUrl: preview.sourceUrl,
-          packId,
           group,
           title: title.trim(),
           docCode: docCode.trim(),
@@ -299,7 +281,6 @@ export function BasisImportPanel() {
         body: JSON.stringify({
           action: 'addList',
           listUrl: listUrl.trim(),
-          packId: listPackId,
           group: listGroup,
           title: listTitle.trim() || undefined,
         }),
@@ -437,13 +418,13 @@ export function BasisImportPanel() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium tracking-wide text-[var(--app-accent)]">
-            第 2 步 · 采集入库
+            第 1 步 · 采集入库
           </p>
           <h2 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--app-ink)]">
             同步官方栏目
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--app-muted)]">
-            从官网列表抓取文件元数据。网站会自动识别；你只要选好「写入哪个推荐包」，决定这些文件以后推荐给谁。
+            从官网列表抓取文件元数据。网站会自动识别，并按来源官网自动归库。
           </p>
         </div>
         <Button
@@ -501,7 +482,7 @@ export function BasisImportPanel() {
               onChange={event => setListTitle(event.target.value)}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
+          <div className="grid gap-3 sm:grid-cols-[140px_auto]">
             <div className="space-y-2">
               <Label>类型</Label>
               <Select
@@ -520,27 +501,6 @@ export function BasisImportPanel() {
               </Select>
               <p className="text-[11px] leading-snug text-[var(--app-muted)]">
                 对应报告 1.3：政策 / 标准规范。
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>写入推荐包</Label>
-              <Select value={listPackId} onValueChange={setListPackId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="推荐包" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(packs.length
-                    ? packs
-                    : [{ id: 'pack_common_gov', name: '政府投资可研通用' }]
-                  ).map(pack => (
-                    <SelectItem key={pack.id} value={pack.id}>
-                      {pack.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] leading-snug text-[var(--app-muted)]">
-                与「按网站浏览」无关：只决定项目智能依据里会不会被召回。
               </p>
             </div>
             <div className="flex items-end">
@@ -779,20 +739,10 @@ export function BasisImportPanel() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>写入推荐包</Label>
-                <Select value={packId} onValueChange={setPackId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {preview.packs.map(pack => (
-                      <SelectItem key={pack.id} value={pack.id}>
-                        {pack.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2 sm:col-span-2">
+                <p className="text-xs text-[var(--app-muted)]">
+                  来源：{preview.siteName}（按来源自动归库）
+                </p>
               </div>
             </div>
             <Button
