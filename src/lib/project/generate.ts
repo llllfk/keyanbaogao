@@ -483,6 +483,8 @@ export async function generateOneChapter(options: {
   const approxWords = chapterTargetWords(
     config.targetWords,
     llmChapterCount,
+    chapter.id,
+    Boolean(chapter.autoExpand),
   );
   // 中文约 1～2 token/字；给足余量，避免长章被截断
   const maxTokens = Math.min(8192, Math.max(4096, Math.round(approxWords * 2)));
